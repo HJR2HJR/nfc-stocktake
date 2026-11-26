@@ -71,6 +71,7 @@ dialog #boxInput{width:100%;height:44px;border:1px solid var(--line);border-radi
 dialog .btns{display:flex;gap:8px;margin-top:14px}dialog .btns button{flex:1}
 .issuepick label{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line);font-size:16px}
 .issuepick input{width:22px;height:22px}
+.issuenote{width:100%;height:44px;margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:0 10px;font-size:15px}
 </style>
 </head>
 <body>
@@ -84,7 +85,7 @@ dialog .btns{display:flex;gap:8px;margin-top:14px}dialog .btns button{flex:1}
   <div class="panel" id="panel">
     <div class="big" id="title">点下方“开始扫描”</div>
     <div class="hint" id="hint">把卡贴在手机背面，读到后会震动</div>
-    <div class="steps" id="steps" hidden><span id="stepHead">① 扫头</span><span id="stepTail">② 扫尾</span><span id="stepCount">③ 填张数</span></div>
+    <div class="steps" id="steps" hidden><span id="stepHead">① 扫头</span><span id="stepTail">② 扫尾</span></div>
     <div class="code" id="last"></div>
     <div class="count" id="countBox" hidden><input id="count" type="number" inputmode="numeric" min="2" placeholder="含头尾共几张，默认 10"><button class="primary" id="countOk">确认</button></div>
     <video id="video" playsinline muted hidden></video>
@@ -98,12 +99,12 @@ dialog .btns{display:flex;gap:8px;margin-top:14px}dialog .btns button{flex:1}
 <footer><button class="primary" id="export">导出表格</button></footer>
 
 <dialog id="boxDialog"><h3>换一个盒子</h3><p>之后扫的卡都记在这个盒子里，按扫描顺序编号</p><input id="boxInput" placeholder="如：白卡 A、拍摄样品盒"><div class="btns"><button id="boxCancel">取消</button><button class="primary" id="boxOk">确定</button></div></dialog>
-<dialog id="issueDialog"><h3 id="issueTitle">标记问题</h3><p>可多选；导入运营台后，有问题的卡算“残次品”，不再当闲置出售</p><div class="issuepick" id="issuePick"></div><div class="btns"><button id="issueCancel">取消</button><button class="primary" id="issueOk">保存</button></div></dialog>
+<dialog id="issueDialog"><h3 id="issueTitle">标记问题</h3><p>可多选；导入运营台后，有问题的卡算“残次品”，不再当闲置出售</p><div class="issuepick" id="issuePick"></div><input id="issueNote" class="issuenote" placeholder="说明（可选），如过时的原因：商标颜色、哑光"><div class="btns"><button id="issueCancel">取消</button><button class="primary" id="issueOk">保存</button></div></dialog>
 
 <script>
 // 只在本机浏览器保存扫描记录（localStorage），不上传任何数据；导出 CSV 后导入 NFC 运营台“公司库存 › 盘点”。
 const KEY="nfc-stocktake-v1",UUID=/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-const ISSUES=["外观瑕疵","NFC失效","NFC链接错","二维码错","码不一致"];
+const ISSUES=["外观瑕疵","NFC失效","NFC链接错","二维码错","码不一致","过时"];
 const $=id=>document.getElementById(id);
 let state={box:"未分盒",rows:[],check:false},mode="single",pendingHead=null,pendingTail=null,pendingIssues=[],reader=null,wake=null;
 // 相机：camPurpose="primary" 用二维码代替 NFC 记一张；"check" 核对刚贴的 NFC
@@ -129,9 +130,9 @@ function showStep(){
   if(camPurpose==="check"){$("title").textContent="扫这张的二维码";$("hint").textContent=`核对 NFC：${short(checkNfc)}`;return}
   if(camPurpose==="primary"){$("title").textContent="对准二维码";$("hint").textContent="NFC 读不了的卡用这个记";return}
   if(!strip){$("title").textContent=reader?"请贴下一张":"点下方“开始扫描”";$("hint").textContent="把卡贴在手机背面，读到后会震动";return}
-  $("stepHead").className=pendingHead?"done":"on";$("stepTail").className=pendingTail?"done":pendingHead?"on":"";$("stepCount").className=pendingTail?"on":"";
-  $("title").textContent=!pendingHead?"扫这一串的第一张":!pendingTail?"扫这一串的最后一张":"这一串一共几张？";
-  $("hint").textContent=!pendingHead?"连在一起的卡只扫头和尾":!pendingTail?`头：${short(pendingHead)}`:"默认 10 张，不对就改（含头尾）";
+  $("stepHead").className=pendingHead?"done":"on";$("stepTail").className=pendingTail?"done":pendingHead?"on":"";
+  $("title").textContent=!pendingHead?"扫这一串的第一张":"扫这一串的最后一张";
+  $("hint").textContent=!pendingHead?"连在一起的卡只扫头和尾，默认一串 10 张":`头：${short(pendingHead)}`;
 }
 function render(){
   $("boxName").textContent=state.box;$("total").textContent=cards();$("checkMode").checked=Boolean(state.check);
@@ -141,7 +142,7 @@ function render(){
     if(row.box!==lastBox){const sep=document.createElement("div");sep.className="boxsep";sep.textContent=row.box;list.appendChild(sep);lastBox=row.box}
     const el=document.createElement("div");el.className="row";
     const dup=row.dup?'<span class="tag dup">重复</span>':"",via=row.via==="qr"?'<span class="tag via">二维码</span>':"";
-    const issues=(row.issues||[]).map(issue=>`<span class="tag issue">${issue}</span>`).join("");
+    const issues=issueText(row).map(issue=>`<span class="tag issue">${issue}</span>`).join("");
     el.innerHTML=row.kind==="串"
       ?`<div class="n">${row.order}</div><div class="body"><div class="c"><span class="tag strip edit-count" title="点一下改张数">一串 ${row.count} 张 ✎</span>${dup}${short(row.head)} → ${short(row.tail)}</div><div class="meta">${row.time}</div>${issues?`<div class="issues">${issues}</div>`:""}</div>`
       :`<div class="n">${row.order}</div><div class="body"><div class="c">${dup}${via}${row.head}</div><div class="meta">${row.time}</div>${issues?`<div class="issues">${issues}</div>`:""}</div>`;
@@ -154,13 +155,16 @@ function render(){
   });
   $("undo").disabled=!state.rows.length;
 }
+/** 过时带说明写成“过时_说明”（运营台识别为“过时：说明”）；没有选过时时，说明单独放在“问题说明”列。 */
+function issueText(row){const note=(row.issueNote||"").trim();return(row.issues||[]).map(issue=>issue==="过时"&&note?`过时_${note}`:issue)}
 function renumber(){state.rows.forEach((row,index)=>row.order=index+1);save();render()}
 function add(row){state.rows.push({issues:[],...row,order:state.rows.length+1,box:state.box,time:now()});save();render()}
 function editIssues(row){
   $("issueTitle").textContent=`第 ${row.order} 条：标记问题`;
   $("issuePick").innerHTML=ISSUES.map(issue=>`<label><input type="checkbox" value="${issue}" ${(row.issues||[]).includes(issue)?"checked":""}>${issue}</label>`).join("");
+  $("issueNote").value=row.issueNote||"";
   const dialog=$("issueDialog");dialog.showModal();
-  $("issueOk").onclick=()=>{row.issues=[...$("issuePick").querySelectorAll("input:checked")].map(input=>input.value);save();render();dialog.close()};
+  $("issueOk").onclick=()=>{row.issues=[...$("issuePick").querySelectorAll("input:checked")].map(input=>input.value);row.issueNote=$("issueNote").value.trim();save();render();dialog.close()};
   $("issueCancel").onclick=()=>dialog.close();
 }
 
@@ -179,7 +183,8 @@ function record(code,via,issues,qr=""){
     issues.length?flash("bad",`第 ${state.rows.length} 条已记，有问题`,issues.join("、"),code):flash("ok",`第 ${state.rows.length} 条 ✓`,"",code);return;
   }
   if(!pendingHead){pendingHead=code;pendingIssues=[...issues];flash(issues.length?"bad":"ok","头已记下",issues.length?issues.join("、"):"接着扫这一串的最后一张",code);return}
-  if(!pendingTail){if(code===pendingHead){flash("bad","扫到的还是头","请扫这一串的最后一张");return}pendingTail=code;pendingIssues=[...new Set([...pendingIssues,...issues])];$("count").value="10";$("countBox").hidden=false;flash(issues.length?"bad":"ok","尾已记下",issues.length?issues.join("、"):"默认 10 张，不对就改（含头尾）",code);return}
+  // 扫完尾直接按 10 张记下；不是 10 张就点记录上的“一串 N 张”修改
+  if(!pendingTail){if(code===pendingHead){flash("bad","扫到的还是头","请扫这一串的最后一张");return}pendingTail=code;pendingIssues=[...new Set([...pendingIssues,...issues])];$("count").value="10";confirmCount();return}
   flash("bad","先填张数","这一串还没填张数")
 }
 function confirmCount(){
@@ -188,7 +193,7 @@ function confirmCount(){
   if(!confirmDuplicate([pendingHead,pendingTail])){flash("warn","没有记录","这一串的头或尾之前扫过，已忽略");pendingHead=pendingTail=null;pendingIssues=[];$("count").value="";showStep();return}
   const dup=seen(pendingHead)||seen(pendingTail);
   add({kind:"串",head:pendingHead,tail:pendingTail,count,dup,via:"nfc",issues:pendingIssues});pendingHead=pendingTail=null;pendingIssues=[];$("count").value="";
-  flash("ok",`一串 ${count} 张已记 ✓`,"可以扫下一串")
+  flash("ok",`一串 ${count} 张已记 ✓`,"不是 10 张就点记录上的张数修改")
 }
 function setMode(next){
   if(mode===next)return;
@@ -247,8 +252,8 @@ async function toggleTorch(){const track=stream?.getVideoTracks()[0];if(!track)r
 
 // ---------- 导出 / 清空 ----------
 function csv(){
-  const head=["序号","盒子","类型","编码","尾编码","张数","时间","问题","读取方式","核对二维码"],cell=value=>{const text=String(value??"");return /[",\n]/.test(text)?`"${text.replace(/"/g,'""')}"`:text};
-  return "﻿"+[head,...state.rows.map(row=>[row.order,row.box,row.kind,row.head,row.tail,row.count,row.time,(row.issues||[]).join("、"),row.via==="qr"?"二维码":"NFC",row.qr||""])].map(line=>line.map(cell).join(",")).join("\r\n")+"\r\n";
+  const head=["序号","盒子","类型","编码","尾编码","张数","时间","问题","问题说明","读取方式","核对二维码"],cell=value=>{const text=String(value??"");return /[",\n]/.test(text)?`"${text.replace(/"/g,'""')}"`:text};
+  return "﻿"+[head,...state.rows.map(row=>[row.order,row.box,row.kind,row.head,row.tail,row.count,row.time,issueText(row).join("、"),row.issueNote||"",row.via==="qr"?"二维码":"NFC",row.qr||""])].map(line=>line.map(cell).join(",")).join("\r\n")+"\r\n";
 }
 async function exportFile(){
   if(!state.rows.length){flash("bad","还没有记录","");return}
