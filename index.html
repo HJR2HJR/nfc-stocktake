@@ -107,7 +107,7 @@ const ISSUES=["外观瑕疵","NFC失效","NFC链接错","二维码错","码不�
 const $=id=>document.getElementById(id);
 let state={box:"未分盒",rows:[],check:false},mode="single",pendingHead=null,pendingTail=null,pendingIssues=[],reader=null,wake=null;
 // 相机：camPurpose="primary" 用二维码代替 NFC 记一张；"check" 核对刚贴的 NFC
-let stream=null,detector=null,scanning=false,camPurpose="",checkNfc="",lastQr="",lastQrAt=0,torchOn=false;
+let lastNfc="",lastNfcAt=0,stream=null,detector=null,scanning=false,camPurpose="",checkNfc="",lastQr="",lastQrAt=0,torchOn=false;
 try{const saved=JSON.parse(localStorage.getItem(KEY)||"null");if(saved&&Array.isArray(saved.rows))state={check:false,...saved}}catch{}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch(error){showNotice("本机存储失败，请尽快导出："+error.message)}};
 try{navigator.storage?.persist?.()}catch{}
@@ -200,8 +200,10 @@ function setMode(next){
 async function start(){
   if(!("NDEFReader" in window)){showNotice("这个浏览器不能读 NFC。请用安卓手机的 Chrome 打开；也可以用“扫二维码”或手动粘贴编码。");return}
   try{
+    // 整个页面只开一个读卡器：重复新建会让一次贴卡触发多次读取。
+    if(reader){showNotice("");render();showStep();return}
     reader=new NDEFReader();await reader.scan();
-    reader.onreading=event=>{if(camPurpose)return;let found="";for(const record of event.message.records){try{const text=new TextDecoder(record.encoding||"utf-8").decode(record.data);found=found||codeOf(text)}catch{}}accept(found,"nfc")};
+    reader.onreading=event=>{if(camPurpose)return;const t=Date.now();let found="";for(const record of event.message.records){try{const text=new TextDecoder(record.encoding||"utf-8").decode(record.data);found=found||codeOf(text)}catch{}}if(found&&found===lastNfc&&t-lastNfcAt<2000){lastNfcAt=t;return}lastNfc=found;lastNfcAt=t;accept(found,"nfc")};
     reader.onreadingerror=()=>flash("bad","读取失败","请把卡贴稳一点再试，或点扫描图标扫二维码");
     showNotice("");render();showStep();
     try{wake=await navigator.wakeLock?.request("screen")}catch{}
