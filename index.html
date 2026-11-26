@@ -47,7 +47,7 @@ button:disabled{opacity:.45}
 .row .c{font-family:ui-monospace,Consolas,monospace;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .meta{font-size:12px;color:var(--muted)}
 .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;margin-right:4px;vertical-align:1px}
-.tag.strip{background:var(--stripbg);color:var(--strip)}.tag.dup{background:var(--warnbg);color:var(--warn)}
+.tag.strip{background:var(--stripbg);color:var(--strip)}.edit-count{cursor:pointer;padding:3px 9px;font-size:12px;border:1px solid #d9ccff}.tag.dup{background:var(--warnbg);color:var(--warn)}
 .row button{height:32px;padding:0 9px;font-size:13px;color:var(--bad);border-color:#f3c8c8}
 .boxsep{font-size:12px;color:var(--primary);margin:10px 2px 4px;font-weight:600}
 footer{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;max-width:100%}
@@ -71,7 +71,7 @@ dialog .btns{display:flex;gap:8px;margin-top:14px}dialog .btns button{flex:1}
     <div class="hint" id="hint">把卡贴在手机背面，读到后会震动</div>
     <div class="steps" id="steps" hidden><span id="stepHead">① 扫头</span><span id="stepTail">② 扫尾</span><span id="stepCount">③ 填张数</span></div>
     <div class="code" id="last"></div>
-    <div class="count" id="countBox" hidden><input id="count" type="number" inputmode="numeric" min="2" placeholder="含头尾共几张"><button class="primary" id="countOk">确认</button></div>
+    <div class="count" id="countBox" hidden><input id="count" type="number" inputmode="numeric" min="2" placeholder="含头尾共几张，默认 10"><button class="primary" id="countOk">确认</button></div>
     <button class="primary" id="start" style="width:100%;margin-top:12px">开始扫描</button>
     <div class="notice" id="notice" hidden></div>
   </div>
@@ -107,7 +107,7 @@ function showStep(){
   $("stepHead").className=pendingHead?"done":"on";$("stepTail").className=pendingTail?"done":pendingHead?"on":"";$("stepCount").className=pendingTail?"on":"";
   $("title").textContent=!pendingHead?"扫这一串的第一张":!pendingTail?"扫这一串的最后一张":"这一串一共几张？";
   $("hint").textContent=!pendingHead?"连在一起的卡只扫头和尾":!pendingTail?`头：${short(pendingHead)}`:"头和尾都算进去";
-  if(pendingTail)setTimeout(()=>$("count").focus(),50);
+  if(pendingTail){if(!$("count").value)$("count").value="10";setTimeout(()=>{$("count").focus();$("count").select()},50)}
 }
 function render(){
   $("boxName").textContent=state.box;$("total").textContent=cards();
@@ -117,9 +117,10 @@ function render(){
     const el=document.createElement("div");el.className="row";
     const dup=row.dup?'<span class="tag dup">重复</span>':"";
     el.innerHTML=row.kind==="串"
-      ?`<div class="n">${row.order}</div><div class="body"><div class="c"><span class="tag strip">一串 ${row.count} 张</span>${dup}${short(row.head)} → ${short(row.tail)}</div><div class="meta">${row.time}</div></div>`
+      ?`<div class="n">${row.order}</div><div class="body"><div class="c"><span class="tag strip edit-count" title="点一下改张数">一串 ${row.count} 张 ✎</span>${dup}${short(row.head)} → ${short(row.tail)}</div><div class="meta">${row.time}</div></div>`
       :`<div class="n">${row.order}</div><div class="body"><div class="c">${dup}${row.head}</div><div class="meta">${row.time}</div></div>`;
     const del=document.createElement("button");del.textContent="删除";del.onclick=()=>{if(confirm(`删除第 ${row.order} 条？后面的序号会顺延`)){state.rows=state.rows.filter(item=>item!==row);renumber()}};
+    const tag=el.querySelector(".edit-count");if(tag)tag.onclick=()=>{const value=prompt(`第 ${row.order} 条这一串一共几张（含头尾）？`,String(row.count)),count=Math.floor(Number(value));if(value===null)return;if(!count||count<2){alert("一串至少 2 张");return}row.count=count;save();render()};
     el.appendChild(del);list.appendChild(el);
   });
   $("undo").disabled=!state.rows.length;
@@ -134,7 +135,7 @@ function accept(code){
     dup?flash("warn","已记，但这张扫过了","共用拍摄编码的样品可以忽略；否则请检查是否重复",code):flash("ok",`第 ${state.rows.length} 条 ✓`,"",code);return;
   }
   if(!pendingHead){pendingHead=code;flash("ok","头已记下","接着扫这一串的最后一张",code);return}
-  if(!pendingTail){if(code===pendingHead){flash("bad","扫到的还是头","请扫这一串的最后一张");return}pendingTail=code;flash("ok","尾已记下","填这一串一共几张（含头尾）",code);return}
+  if(!pendingTail){if(code===pendingHead){flash("bad","扫到的还是头","请扫这一串的最后一张");return}pendingTail=code;$("count").value="10";$("countBox").hidden=false;flash("ok","尾已记下","默认 10 张，不对就改（含头尾）",code);return}
   flash("bad","先填张数","这一串还没填张数")
 }
 function confirmCount(){
