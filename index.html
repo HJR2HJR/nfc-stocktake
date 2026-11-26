@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f5fd6">
+<title>NFC 盘点扫码</title>
+<style>
+:root{--bg:#f5f7fa;--surface:#fff;--text:#1d2939;--muted:#667085;--line:#e1e6ee;--primary:#1f5fd6;--ok:#16834d;--okbg:#e8f6ee;--warn:#b54708;--warnbg:#fff4e5;--bad:#b42318;--badbg:#fdecec;--strip:#6941c6;--stripbg:#f3efff}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;-webkit-tap-highlight-color:transparent}
+header{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 14px calc(8px)}
+.top{display:flex;align-items:center;gap:10px}
+h1{font-size:17px;margin:0;flex:1}
+.total{font-size:13px;color:var(--muted)}.total b{color:var(--text);font-size:17px}
+.box{display:flex;align-items:center;gap:8px;margin-top:8px}
+.box span{font-size:13px;color:var(--muted)}
+.box b{font-size:16px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+main{padding:12px 14px 120px;max-width:640px;margin:0 auto}
+button{font:inherit;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:10px;padding:0 14px;height:42px;cursor:pointer}
+button.primary{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+button.small{height:34px;padding:0 11px;font-size:14px;border-radius:8px}
+button:disabled{opacity:.45}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#e9edf3;padding:4px;border-radius:12px}
+.modes button{border:0;background:transparent;height:40px;border-radius:9px;color:var(--muted)}
+.modes button.on{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 1px 3px #0002}
+.panel{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center;transition:background .25s}
+.panel.ok{background:var(--okbg)}.panel.warn{background:var(--warnbg)}.panel.bad{background:var(--badbg)}
+.panel .big{font-size:20px;font-weight:700;margin:4px 0}
+.panel .hint{color:var(--muted);font-size:14px}
+.panel .code{font-family:ui-monospace,Consolas,monospace;font-size:13px;word-break:break-all;margin-top:6px}
+.steps{display:flex;gap:6px;justify-content:center;margin:10px 0 2px}
+.steps span{font-size:13px;padding:3px 10px;border-radius:99px;background:#eef1f5;color:var(--muted)}
+.steps span.on{background:var(--stripbg);color:var(--strip);font-weight:600}
+.steps span.done{background:var(--okbg);color:var(--ok)}
+.count{display:flex;gap:8px;margin-top:12px}
+.count input{flex:1;height:48px;font-size:22px;text-align:center;border:1px solid var(--line);border-radius:10px}
+.manual{display:flex;gap:8px;margin-top:12px}
+.manual input{flex:1;min-width:0;height:42px;border:1px solid var(--line);border-radius:10px;padding:0 10px;font-size:14px}
+.list{margin-top:16px}
+.list h2{font-size:14px;color:var(--muted);font-weight:600;margin:0 0 6px;display:flex;align-items:center}
+.list h2 span{flex:1}
+.row{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 10px;margin-bottom:6px}
+.row .n{min-width:30px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.row .body{flex:1;min-width:0}
+.row .c{font-family:ui-monospace,Consolas,monospace;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .meta{font-size:12px;color:var(--muted)}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;margin-right:4px;vertical-align:1px}
+.tag.strip{background:var(--stripbg);color:var(--strip)}.tag.dup{background:var(--warnbg);color:var(--warn)}
+.row button{height:32px;padding:0 9px;font-size:13px;color:var(--bad);border-color:#f3c8c8}
+.boxsep{font-size:12px;color:var(--primary);margin:10px 2px 4px;font-weight:600}
+footer{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;max-width:100%}
+footer button{flex:1}
+.notice{font-size:13px;color:var(--bad);background:var(--badbg);border-radius:10px;padding:10px 12px;margin-top:12px;text-align:left}
+dialog{border:0;border-radius:14px;padding:18px;width:min(420px,calc(100vw - 32px))}
+dialog h3{margin:0 0 10px;font-size:17px}
+dialog input{width:100%;height:44px;border:1px solid var(--line);border-radius:10px;padding:0 10px;font-size:16px}
+dialog .btns{display:flex;gap:8px;margin-top:14px}dialog .btns button{flex:1}
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><h1>NFC 盘点扫码</h1><div class="total">已记 <b id="total">0</b> 张</div></div>
+  <div class="box"><span>当前盒子</span><b id="boxName">未分盒</b><button class="small" id="newBox">换盒子</button></div>
+</header>
+<main>
+  <div class="modes"><button id="modeSingle" class="on">单张</button><button id="modeStrip">一串（头尾）</button></div>
+  <div class="panel" id="panel">
+    <div class="big" id="title">点下方“开始扫描”</div>
+    <div class="hint" id="hint">把卡贴在手机背面，读到后会震动</div>
+    <div class="steps" id="steps" hidden><span id="stepHead">① 扫头</span><span id="stepTail">② 扫尾</span><span id="stepCount">③ 填张数</span></div>
+    <div class="code" id="last"></div>
+    <div class="count" id="countBox" hidden><input id="count" type="number" inputmode="numeric" min="2" placeholder="含头尾共几张"><button class="primary" id="countOk">确认</button></div>
+    <button class="primary" id="start" style="width:100%;margin-top:12px">开始扫描</button>
+    <div class="notice" id="notice" hidden></div>
+  </div>
+  <div class="manual"><input id="manual" placeholder="读不到时：粘贴编码或链接"><button id="manualAdd">添加</button></div>
+  <div class="list"><h2><span>扫描记录（最新在上）</span><button class="small" id="undo">撤销上一条</button></h2><div id="rows"></div></div>
+</main>
+<footer><button id="clear">清空</button><button class="primary" id="export">导出表格</button></footer>
+
+<dialog id="boxDialog"><h3>换一个盒子</h3><p style="margin:0 0 8px;color:#667085;font-size:14px">之后扫的卡都记在这个盒子里，按扫描顺序编号</p><input id="boxInput" placeholder="如：白卡 A、拍摄样品盒"><div class="btns"><button id="boxCancel">取消</button><button class="primary" id="boxOk">确定</button></div></dialog>
+
+<script>
+// 只在本机浏览器保存扫描记录（localStorage），不上传任何数据；导出 CSV 后导入 NFC 运营台“公司库存 › 盘点”。
+const KEY="nfc-stocktake-v1",UUID=/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const $=id=>document.getElementById(id);
+let state={box:"未分盒",rows:[]},mode="single",pendingHead=null,pendingTail=null,reader=null,wake=null;
+try{const saved=JSON.parse(localStorage.getItem(KEY)||"null");if(saved&&Array.isArray(saved.rows))state=saved}catch{}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}};
+const codeOf=text=>(String(text||"").match(UUID)||[""])[0].toLowerCase();
+const short=code=>`${code.slice(0,8)}…${code.slice(-4)}`;
+const cards=()=>state.rows.reduce((n,row)=>n+row.count,0);
+const seen=code=>state.rows.some(row=>row.head===code||row.tail===code);
+const now=()=>new Date().toLocaleString("zh-CN",{hour12:false});
+
+function flash(kind,title,hint,code){
+  const panel=$("panel");panel.className="panel "+kind;$("title").textContent=title;$("hint").textContent=hint||"";$("last").textContent=code||"";
+  try{navigator.vibrate&&navigator.vibrate(kind==="ok"?60:[80,60,80])}catch{}
+  try{const ctx=new (window.AudioContext||window.webkitAudioContext)(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=kind==="ok"?880:300;gain.gain.value=.08;osc.connect(gain);gain.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+(kind==="ok"?.08:.25))}catch{}
+  clearTimeout(flash.timer);flash.timer=setTimeout(()=>{panel.className="panel";showStep()},1600);
+}
+function showStep(){
+  const strip=mode==="strip";$("steps").hidden=!strip;$("countBox").hidden=!(strip&&pendingTail);
+  if(!strip){$("title").textContent=reader?"请贴下一张":"点下方“开始扫描”";$("hint").textContent="把卡贴在手机背面，读到后会震动";return}
+  $("stepHead").className=pendingHead?"done":"on";$("stepTail").className=pendingTail?"done":pendingHead?"on":"";$("stepCount").className=pendingTail?"on":"";
+  $("title").textContent=!pendingHead?"扫这一串的第一张":!pendingTail?"扫这一串的最后一张":"这一串一共几张？";
+  $("hint").textContent=!pendingHead?"连在一起的卡只扫头和尾":!pendingTail?`头：${short(pendingHead)}`:"头和尾都算进去";
+  if(pendingTail)setTimeout(()=>$("count").focus(),50);
+}
+function render(){
+  $("boxName").textContent=state.box;$("total").textContent=cards();
+  const list=$("rows");list.innerHTML="";let lastBox=null;
+  [...state.rows].reverse().forEach((row,index)=>{
+    if(row.box!==lastBox){const sep=document.createElement("div");sep.className="boxsep";sep.textContent=row.box;list.appendChild(sep);lastBox=row.box}
+    const el=document.createElement("div");el.className="row";
+    const dup=row.dup?'<span class="tag dup">重复</span>':"";
+    el.innerHTML=row.kind==="串"
+      ?`<div class="n">${row.order}</div><div class="body"><div class="c"><span class="tag strip">一串 ${row.count} 张</span>${dup}${short(row.head)} → ${short(row.tail)}</div><div class="meta">${row.time}</div></div>`
+      :`<div class="n">${row.order}</div><div class="body"><div class="c">${dup}${row.head}</div><div class="meta">${row.time}</div></div>`;
+    const del=document.createElement("button");del.textContent="删除";del.onclick=()=>{if(confirm(`删除第 ${row.order} 条？后面的序号会顺延`)){state.rows=state.rows.filter(item=>item!==row);renumber()}};
+    el.appendChild(del);list.appendChild(el);
+  });
+  $("undo").disabled=!state.rows.length;
+}
+function renumber(){state.rows.forEach((row,index)=>row.order=index+1);save();render()}
+function add(row){state.rows.push({...row,order:state.rows.length+1,box:state.box,time:now()});save();render()}
+
+function accept(code){
+  if(!code){flash("bad","没读到编码","这张卡里没有点评卡链接，请重试或手动粘贴");return}
+  if(mode==="single"){
+    const dup=seen(code);add({kind:"单张",head:code,tail:"",count:1,dup});
+    dup?flash("warn","已记，但这张扫过了","共用拍摄编码的样品可以忽略；否则请检查是否重复",code):flash("ok",`第 ${state.rows.length} 条 ✓`,"",code);return;
+  }
+  if(!pendingHead){pendingHead=code;flash("ok","头已记下","接着扫这一串的最后一张",code);return}
+  if(!pendingTail){if(code===pendingHead){flash("bad","扫到的还是头","请扫这一串的最后一张");return}pendingTail=code;flash("ok","尾已记下","填这一串一共几张（含头尾）",code);return}
+  flash("bad","先填张数","这一串还没填张数")
+}
+function confirmCount(){
+  const count=Number($("count").value);
+  if(!Number.isInteger(count)||count<2){flash("bad","张数不对","一串至少 2 张（含头尾）");return}
+  const dup=seen(pendingHead)||seen(pendingTail);
+  add({kind:"串",head:pendingHead,tail:pendingTail,count,dup});pendingHead=pendingTail=null;$("count").value="";
+  flash(dup?"warn":"ok",`一串 ${count} 张已记 ✓`,dup?"这一串的头或尾扫过了，请检查":"可以扫下一串")
+}
+function setMode(next){
+  if(mode===next)return;
+  if(pendingHead&&!confirm("这一串还没记完，切换会丢掉已扫的头尾，确定吗？"))return;
+  mode=next;pendingHead=pendingTail=null;$("modeSingle").className=next==="single"?"on":"";$("modeStrip").className=next==="strip"?"on":"";showStep()
+}
+async function start(){
+  if(!("NDEFReader" in window)){const n=$("notice");n.hidden=false;n.textContent="这个浏览器不能读 NFC。请用安卓手机的 Chrome 打开；也可以在下面手动粘贴编码。";return}
+  try{
+    reader=new NDEFReader();await reader.scan();
+    reader.onreading=event=>{let found="";for(const record of event.message.records){try{const text=new TextDecoder(record.encoding||"utf-8").decode(record.data);found=found||codeOf(text)}catch{}}accept(found)};
+    reader.onreadingerror=()=>flash("bad","读取失败","请把卡贴稳一点再试");
+    $("start").hidden=true;$("notice").hidden=true;showStep();
+    try{wake=await navigator.wakeLock?.request("screen")}catch{}
+  }catch(error){const n=$("notice");n.hidden=false;n.textContent=`无法开始扫描：${error.message||error}。请确认手机 NFC 已打开，并允许本网页使用 NFC。`}
+}
+function csv(){
+  const head=["序号","盒子","类型","编码","尾编码","张数","时间"],cell=value=>{const text=String(value??"");return /[",\n]/.test(text)?`"${text.replace(/"/g,'""')}"`:text};
+  return "﻿"+[head,...state.rows.map(row=>[row.order,row.box,row.kind,row.head,row.tail,row.count,row.time])].map(line=>line.map(cell).join(",")).join("\r\n")+"\r\n";
+}
+async function exportFile(){
+  if(!state.rows.length){flash("bad","还没有记录","");return}
+  if(pendingHead&&!confirm("还有一串没记完（不会导出），继续导出吗？"))return;
+  const stamp=new Date().toISOString().slice(0,16).replace(/[-:T]/g,"").replace(/^(\d{8})/,"$1-"),name=`盘点扫码-${stamp}.csv`,file=new File([csv()],name,{type:"text/csv"});
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:name});return}}catch(error){if(error.name==="AbortError")return}
+  const link=document.createElement("a");link.href=URL.createObjectURL(file);link.download=name;document.body.appendChild(link);link.click();setTimeout(()=>{URL.revokeObjectURL(link.href);link.remove()},1000);
+}
+$("start").onclick=start;
+$("modeSingle").onclick=()=>setMode("single");$("modeStrip").onclick=()=>setMode("strip");
+$("countOk").onclick=confirmCount;$("count").onkeydown=event=>{if(event.key==="Enter")confirmCount()};
+$("manualAdd").onclick=()=>{const code=codeOf($("manual").value);if(!code){flash("bad","没识别到编码","请粘贴完整编码或绑定链接");return}$("manual").value="";accept(code)};
+$("undo").onclick=()=>{const last=state.rows.at(-1);if(last&&confirm(`撤销第 ${last.order} 条（${last.kind==="串"?`一串 ${last.count} 张`:short(last.head)}）？`)){state.rows.pop();save();render()}};
+$("newBox").onclick=()=>{$("boxInput").value="";$("boxDialog").showModal();setTimeout(()=>$("boxInput").focus(),50)};
+$("boxCancel").onclick=()=>$("boxDialog").close();
+$("boxOk").onclick=()=>{const name=$("boxInput").value.trim();if(!name)return;state.box=name;save();render();$("boxDialog").close();flash("ok",`现在扫：${name}`,"之后的卡都记在这个盒子里")};
+$("boxInput").onkeydown=event=>{if(event.key==="Enter")$("boxOk").click()};
+$("clear").onclick=()=>{if(state.rows.length&&confirm(`清空全部 ${state.rows.length} 条记录？请确认已经导出。`)&&confirm("再次确认：清空后无法恢复")){state={box:state.box,rows:[]};pendingHead=pendingTail=null;save();render();showStep()}};
+$("export").onclick=exportFile;
+document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"&&(!wake||wake.released)&&reader){try{wake=await navigator.wakeLock?.request("screen")}catch{}}});
+render();showStep();
+</script>
+</body>
+</html>
